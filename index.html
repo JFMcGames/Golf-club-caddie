@@ -6,73 +6,93 @@
   <title>Golf Club Caddie — Club Selector</title>
   <style>
     body{font-family:Inter, Roboto, Arial, sans-serif; margin:0; padding:2rem; background:#f7fafc; color:#0f172a}
-    .card{max-width:540px;margin:2rem auto;padding:1.5rem;background:#fff;border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    .card{max-width:740px;margin:2rem auto;padding:1.5rem;background:#fff;border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
     h1{margin:0 0 0.5rem;font-size:1.25rem}
     label{display:block;margin-top:0.75rem;font-weight:600}
-    input[type=number]{width:100%;padding:0.6rem;border:1px solid #e2e8f0;border-radius:6px;margin-top:0.25rem}
+    input[type=number], select{width:100%;padding:0.6rem;border:1px solid #e2e8f0;border-radius:6px;margin-top:0.25rem}
     button{margin-top:1rem;padding:0.6rem 0.9rem;border-radius:6px;border:0;background:#0ea5a4;color:white;font-weight:700;cursor:pointer}
     .result{margin-top:1rem;padding:0.75rem;border-radius:6px;background:#f1f5f9}
     ul{margin:0;padding-left:1.25rem}
     footer{margin-top:1.25rem;font-size:0.85rem;color:#475569}
+    .ranges{font-size:0.95rem;color:#334155;margin-top:0.25rem}
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Golf Club Caddie</h1>
-    <p>Enter a target yardage and the app will suggest which club(s) match the distance ranges.</p>
+    <p>Enter a target yardage and the app will suggest which club(s) match the distance ranges. Choose a wind adjustment to apply a percentage modifier to the yardage.</p>
 
     <label for="yards">Target yards</label>
     <input id="yards" type="number" placeholder="e.g. 175" min="0" />
 
-    <label for="lie">Wind adjustment (yards)</label>
-    <input id="adjust" type="number" value="0" placeholder="positive reduces distance needed, negative increases" />
+    <label for="adjust">Wind / adjustment</label>
+    <select id="adjust" aria-label="Wind adjustment">
+      <option value="-0.10">Strong against (-10%)</option>
+      <option value="-0.05">Breeze against (-5%)</option>
+      <option value="0" selected>Calm (no adjustment)</option>
+      <option value="0.05">Breeze with (+5%)</option>
+      <option value="0.10">Strong with (+10%)</option>
+    </select>
 
     <button id="suggest">Suggest Club</button>
 
     <div class="result" id="result" aria-live="polite">No suggestion yet.</div>
 
-    <footer>Clubs considered: Driver (230–270), 3 Wood (200–245), 7 Wood (160–190), 3 Hybrid (165–200), 5 Iron (160–180)</footer>
+    <footer>
+      Clubs considered (ranges in yards):
+      <div class="ranges">Driver: 230–270; 3 Wood: 200–245; 7 Wood: 160–190; 3 Hybrid: 165–200; 5 Iron: 160–180; 6 Iron: 150–170; 7 Iron: 140–160; 8 Iron: 125–145; 9 Iron: 110–130; Pitching Wedge: 95–115; Gap Wedge: 70–100; Sand Wedge: 40–80; Lob Wedge: &lt;40</div>
+    </footer>
   </div>
 
   <script>
-    // Club data
+    // Club data (Lob Wedge treated as 0-39 yards)
     const clubs = [
       {name: 'Driver', min: 230, max: 270},
       {name: '3 Wood', min: 200, max: 245},
       {name: '7 Wood', min: 160, max: 190},
       {name: '3 Hybrid', min: 165, max: 200},
-      {name: '5 Iron', min: 160, max: 180}
+      {name: '5 Iron', min: 160, max: 180},
+      {name: '6 Iron', min: 150, max: 170},
+      {name: '7 Iron', min: 140, max: 160},
+      {name: '8 Iron', min: 125, max: 145},
+      {name: '9 Iron', min: 110, max: 130},
+      {name: 'Pitching Wedge', min: 95, max: 115},
+      {name: 'Gap Wedge', min: 70, max: 100},
+      {name: 'Sand Wedge', min: 40, max: 80},
+      {name: 'Lob Wedge', min: 0, max: 39} // user provided "<40" so treat as 0-39 yd
     ];
 
     const yardsInput = document.getElementById('yards');
-    const adjustInput = document.getElementById('adjust');
+    const adjustSelect = document.getElementById('adjust');
     const resultEl = document.getElementById('result');
     const btn = document.getElementById('suggest');
 
     function suggest(){
       const yards = Number(yardsInput.value);
-      const adjust = Number(adjustInput.value) || 0;
-      if (!yards || yards < 0){ resultEl.textContent = 'Please enter a valid positive yardage.'; return; }
-      const target = yards + adjust * -1; // positive adjustment reduces required yardage
+      const percent = Number(adjustSelect.value) || 0;
+      if (!Number.isFinite(yards) || yards < 0){ resultEl.textContent = 'Please enter a valid positive yardage.'; return; }
+      // Apply percentage adjustment:
+      // - A negative percent (e.g. -0.10) means "against" and increases required yards.
+      // - A positive percent (e.g. 0.10) means "with" and decreases required yards.
+      const adjusted = Math.round(yards - yards * percent);
 
-      // Find clubs that include the target within their ranges
-      const matches = clubs.filter(c => target >= c.min && target <= c.max);
+      // Find clubs that include the adjusted target within their ranges
+      const matches = clubs.filter(c => adjusted >= c.min && adjusted <= c.max);
 
-      // If exact matches found list them. Otherwise find closest club(s) by distance to range.
       if (matches.length > 0){
-        resultEl.innerHTML = `<strong>Suggested club(s) for ${target} yd:</strong><ul>${matches.map(m=>`<li>${m.name} — ${m.min}–${m.max} yd</li>`).join('')}</ul>`;
+        resultEl.innerHTML = `<strong>Suggested club(s) for ${adjusted} yd (adjusted):</strong><ul>${matches.map(m=>`<li>${m.name} — ${m.min}–${m.max} yd</li>`).join('')}</ul>`;
         return;
       }
 
-      // compute distance to each club range
+      // compute distance to each club range (how far off the adjusted target is from a club's nearest bound)
       const diffs = clubs.map(c=>{
-        const d = (target < c.min) ? (c.min - target) : (target > c.max) ? (target - c.max) : 0;
+        const d = (adjusted < c.min) ? (c.min - adjusted) : (adjusted > c.max) ? (adjusted - c.max) : 0;
         return {...c, diff: d};
       });
       diffs.sort((a,b)=>a.diff - b.diff);
       const best = diffs.filter(d=>d.diff === diffs[0].diff);
 
-      resultEl.innerHTML = `<strong>No club exactly matches ${target} yd.</strong><p>Closest option(s):</p><ul>${best.map(b=>`<li>${b.name} — range ${b.min}–${b.max} yd (off by ${b.diff} yd)</li>`).join('')}</ul>`;
+      resultEl.innerHTML = `<strong>No club exactly matches ${adjusted} yd (adjusted).</strong><p>Closest option(s):</p><ul>${best.map(b=>`<li>${b.name} — range ${b.min}–${b.max} yd (off by ${b.diff} yd)</li>`).join('')}</ul>`;
     }
 
     btn.addEventListener('click', suggest);
