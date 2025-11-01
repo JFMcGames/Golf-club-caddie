@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Golf Club Caddie — Club Selector</title>
+  <style>
+    body{font-family:Inter, Roboto, Arial, sans-serif; margin:0; padding:2rem; background:#f7fafc; color:#0f172a}
+    .card{max-width:540px;margin:2rem auto;padding:1.5rem;background:#fff;border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    h1{margin:0 0 0.5rem;font-size:1.25rem}
+    label{display:block;margin-top:0.75rem;font-weight:600}
+    input[type=number]{width:100%;padding:0.6rem;border:1px solid #e2e8f0;border-radius:6px;margin-top:0.25rem}
+    button{margin-top:1rem;padding:0.6rem 0.9rem;border-radius:6px;border:0;background:#0ea5a4;color:white;font-weight:700;cursor:pointer}
+    .result{margin-top:1rem;padding:0.75rem;border-radius:6px;background:#f1f5f9}
+    ul{margin:0;padding-left:1.25rem}
+    footer{margin-top:1.25rem;font-size:0.85rem;color:#475569}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Golf Club Caddie</h1>
+    <p>Enter a target yardage and the app will suggest which club(s) match the distance ranges.</p>
+
+    <label for="yards">Target yards</label>
+    <input id="yards" type="number" placeholder="e.g. 175" min="0" />
+
+    <label for="lie">Wind adjustment (yards)</label>
+    <input id="adjust" type="number" value="0" placeholder="positive reduces distance needed, negative increases" />
+
+    <button id="suggest">Suggest Club</button>
+
+    <div class="result" id="result" aria-live="polite">No suggestion yet.</div>
+
+    <footer>Clubs considered: Driver (230–270), 3 Wood (200–245), 7 Wood (160–190), 3 Hybrid (165–200), 5 Iron (160–180)</footer>
+  </div>
+
+  <script>
+    // Club data
+    const clubs = [
+      {name: 'Driver', min: 230, max: 270},
+      {name: '3 Wood', min: 200, max: 245},
+      {name: '7 Wood', min: 160, max: 190},
+      {name: '3 Hybrid', min: 165, max: 200},
+      {name: '5 Iron', min: 160, max: 180}
+    ];
+
+    const yardsInput = document.getElementById('yards');
+    const adjustInput = document.getElementById('adjust');
+    const resultEl = document.getElementById('result');
+    const btn = document.getElementById('suggest');
+
+    function suggest(){
+      const yards = Number(yardsInput.value);
+      const adjust = Number(adjustInput.value) || 0;
+      if (!yards || yards < 0){ resultEl.textContent = 'Please enter a valid positive yardage.'; return; }
+      const target = yards + adjust * -1; // positive adjustment reduces required yardage
+
+      // Find clubs that include the target within their ranges
+      const matches = clubs.filter(c => target >= c.min && target <= c.max);
+
+      // If exact matches found list them. Otherwise find closest club(s) by distance to range.
+      if (matches.length > 0){
+        resultEl.innerHTML = `<strong>Suggested club(s) for ${target} yd:</strong><ul>${matches.map(m=>`<li>${m.name} — ${m.min}–${m.max} yd</li>`).join('')}</ul>`;
+        return;
+      }
+
+      // compute distance to each club range
+      const diffs = clubs.map(c=>{
+        const d = (target < c.min) ? (c.min - target) : (target > c.max) ? (target - c.max) : 0;
+        return {...c, diff: d};
+      });
+      diffs.sort((a,b)=>a.diff - b.diff);
+      const best = diffs.filter(d=>d.diff === diffs[0].diff);
+
+      resultEl.innerHTML = `<strong>No club exactly matches ${target} yd.</strong><p>Closest option(s):</p><ul>${best.map(b=>`<li>${b.name} — range ${b.min}–${b.max} yd (off by ${b.diff} yd)</li>`).join('')}</ul>`;
+    }
+
+    btn.addEventListener('click', suggest);
+    yardsInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') suggest(); });
+  </script>
+</body>
+</html>
